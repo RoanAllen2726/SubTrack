@@ -18,22 +18,60 @@ import { ArrowUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 
+// Helper to map snake_case from Supabase to camelCase for UI
+function mapSubscriptionFromDb(dbSub: any): Subscription {
+  return {
+    ...dbSub,
+    id: dbSub.id,
+    name: dbSub.name,
+    category: dbSub.category,
+    price: dbSub.price,
+    currency: dbSub.currency,
+    billingCycle: dbSub.billing_cycle,
+    nextChargeDate: dbSub.next_charge_date,
+    status: dbSub.status,
+    vendorUrl: dbSub.vendor_url,
+    loginUrl: dbSub.login_url,
+    supportUrl: dbSub.support_url,
+    accountEmail: dbSub.account_email,
+    ownerUserId: dbSub.owner_user_id,
+    owner: dbSub.owner,
+    plan: dbSub.plan,
+    seats: dbSub.seats,
+    seatUtilizationPct: dbSub.seat_utilization_pct,
+    autoRenew: dbSub.auto_renew,
+    paymentMethodMask: dbSub.payment_method_mask,
+    trialEnds: dbSub.trial_ends,
+    discount: dbSub.discount,
+    cancelUrl: dbSub.cancel_url,
+    notes: dbSub.notes,
+    createdAt: dbSub.created_at,
+    updatedAt: dbSub.updated_at,
+  };
+}
+
 type SortKey = keyof Subscription | 'owner.name';
 
-export function SubscriptionsTable({ data }: { data: Subscription[] }) {
+export function SubscriptionsTable({ data }: { data: any[] }) {
+  // Map data from Supabase to camelCase for UI
+  const mappedData: Subscription[] = React.useMemo(
+    () => data.map(mapSubscriptionFromDb),
+    [data]
+  );
+
   const [searchTerm, setSearchTerm] = React.useState("");
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>({ key: 'name', direction: 'ascending' });
 
   const sortedData = React.useMemo(() => {
-    let sortableItems = [...data];
+    let sortableItems = [...mappedData];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
         let aValue: any;
         let bValue: any;
 
         if (sortConfig.key === 'owner.name') {
-          aValue = a.owner.name;
-          bValue = b.owner.name;
+          aValue = a.owner?.name || "";
+          bValue = b.owner?.name || "";
         } else {
           aValue = a[sortConfig.key as keyof Subscription];
           bValue = b[sortConfig.key as keyof Subscription];
@@ -49,12 +87,11 @@ export function SubscriptionsTable({ data }: { data: Subscription[] }) {
       });
     }
     return sortableItems;
-  }, [data, sortConfig]);
+  }, [mappedData, sortConfig]);
 
   const filteredData = sortedData.filter((item) =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.owner.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (item.name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()) ||
+    (item.category?.toLowerCase() ?? "").includes(searchTerm.toLowerCase())
   );
 
   const requestSort = (key: SortKey) => {
@@ -141,17 +178,23 @@ export function SubscriptionsTable({ data }: { data: Subscription[] }) {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6">
-                      <AvatarImage src={item.owner.avatarUrl} data-ai-hint="person portrait" />
-                      <AvatarFallback>{item.owner.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src={item.owner?.avatarUrl} data-ai-hint="person portrait" />
+                      <AvatarFallback>{item.owner?.name?.charAt(0) ?? "?"}</AvatarFallback>
                     </Avatar>
-                    <span>{item.owner.name}</span>
+                    <span>{item.owner?.name ?? "—"}</span>
                   </div>
                 </TableCell>
                 <TableCell className="capitalize">{item.billingCycle}</TableCell>
                 <TableCell className="text-right">
-                  {item.price.toLocaleString("en-US", { style: "currency", currency: item.currency })}
+                  {typeof item.price === "number"
+                    ? item.price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" })
+                    : "—"}
                 </TableCell>
-                <TableCell className="text-right">{format(new Date(item.nextChargeDate), "dd MMM yyyy")}</TableCell>
+                <TableCell className="text-right">
+                  {item.nextChargeDate
+                    ? format(new Date(item.nextChargeDate), "dd MMM yyyy")
+                    : "—"}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

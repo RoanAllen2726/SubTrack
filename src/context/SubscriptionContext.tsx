@@ -1,44 +1,55 @@
+"use client"
 
-"use client";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { Subscription } from "@/lib/types";
+import { fetchUserSubscriptions } from "@/lib/supabase/fetch-subscriptions";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-import * as React from 'react';
-import type { Subscription } from '@/lib/types';
-import { subscriptions as initialSubscriptions } from '@/lib/data';
-
-interface SubscriptionContextType {
+const SubscriptionContext = createContext<{
   subscriptions: Subscription[];
   setSubscriptions: React.Dispatch<React.SetStateAction<Subscription[]>>;
-  isLoading: boolean;
-}
+}>({
+  subscriptions: [],
+  setSubscriptions: () => {},
+});
 
-const SubscriptionContext = React.createContext<SubscriptionContextType | undefined>(undefined);
+export const useSubscription = () => useContext(SubscriptionContext);
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
-  const [subscriptions, setSubscriptions] = React.useState<Subscription[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  
-  React.useEffect(() => {
-    // In a real app, you might fetch this from a database.
-    // For now, we'll simulate an async load from our static data.
-    setTimeout(() => {
-        // Set to empty array to simulate no initial subscriptions for onboarding
-        // setSubscriptions(initialSubscriptions);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    let mounted = true;
+
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && mounted) {
+        const subs = await fetchUserSubscriptions(user.id);
+        setSubscriptions(subs);
+      }
+    }
+
+    load();
+
+    // Optionally, listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        fetchUserSubscriptions(session.user.id).then(setSubscriptions);
+      } else {
         setSubscriptions([]);
-        setIsLoading(false);
-    }, 500);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   return (
-    <SubscriptionContext.Provider value={{ subscriptions, setSubscriptions, isLoading }}>
+    <SubscriptionContext.Provider value={{ subscriptions, setSubscriptions }}>
       {children}
     </SubscriptionContext.Provider>
   );
-}
-
-export function useSubscription() {
-  const context = React.useContext(SubscriptionContext);
-  if (context === undefined) {
-    throw new Error('useSubscription must be used within a SubscriptionProvider');
-  }
-  return context;
 }

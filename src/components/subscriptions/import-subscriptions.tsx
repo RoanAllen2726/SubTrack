@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -24,8 +23,9 @@ import {
 } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormMessage } from '../ui/form';
 import { useSubscription } from '@/context/SubscriptionContext';
-import { users } from '@/lib/data';
 import { formatISO } from 'date-fns';
+import { saveSubscriptionsToSupabase } from "@/lib/supabase/save-subscriptions";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const FormSchema = z.object({
   subscriptions: z.array(ExtractedSubscriptionSchema.extend({
@@ -102,44 +102,56 @@ export function ImportSubscriptions({ isOnboarding = false }: { isOnboarding?: b
     form.reset({ subscriptions: [] });
   }
 
-  const onSubmit = (data: z.infer<typeof FormSchema>) => {
+  const onSubmit = async (data: z.infer<typeof FormSchema>) => {
+    setIsLoading(true);
+    setError(null);
+
+    const supabase = createSupabaseBrowserClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setError("You must be signed in to import subscriptions.");
+      setIsLoading(false);
+      return;
+    }
+
     const newSubscriptions: Subscription[] = data.subscriptions.map((sub, index) => ({
-        ...sub,
-        id: sub.id || `manual-sub-${index}`,
-        vendorUrl: '#',
-        loginUrl: '#',
-        supportUrl: '#',
-        accountEmail: 'imported@example.com',
-        ownerUserId: users[0].id,
-        owner: users[0],
-        plan: 'Standard',
-        seats: 1,
-        seatUtilizationPct: 100,
-        autoRenew: true,
-        paymentMethodMask: 'Imported',
-        trialEnds: null,
-        discount: null,
-        cancelUrl: null,
-        notes: 'Imported from PDF.',
-        createdAt: formatISO(new Date()),
-        updatedAt: formatISO(new Date()),
+      ...sub,
+      id: sub.id || `manual-sub-${index}`,
+      vendorUrl: '#',
+      loginUrl: '#',
+      supportUrl: '#',
+      accountEmail: user.email ?? 'imported@example.com',
+      ownerUserId: user.id,
+      owner: {
+        id: user.id,
+        email: user.email ?? '',
+        name: user.user_metadata?.name ?? '', // or another fallback
+        avatarUrl: user.user_metadata?.avatar_url ?? '', // or another fallback
+      },
+      plan: 'Standard',
+      seats: 1,
+      seatUtilizationPct: 100,
+      autoRenew: true,
+      paymentMethodMask: 'Imported',
+      trialEnds: null,
+      discount: null,
+      cancelUrl: null,
+      notes: 'Imported from PDF.',
+      createdAt: formatISO(new Date()),
+      updatedAt: formatISO(new Date()),
     }));
 
-    setSubscriptions(prev => [...prev, ...newSubscriptions]);
-    setIsOpen(false);
-  }
+    const error = await saveSubscriptionsToSupabase(newSubscriptions, user.id);
 
-  const triggerButton = isOnboarding ? (
-    <Button className="w-full sm:w-auto text-lg p-6">
-      <Upload className="mr-2 h-5 w-5" />
-      Import from PDF
-    </Button>
-  ) : (
-    <Button variant="outline">
-      <Upload className="mr-2 h-4 w-4" />
-      Import
-    </Button>
-  );
+    if (error) {
+      setError("Failed to save subscriptions to database.");
+    } else {
+      setIsOpen(false);
+      setSubscriptions(newSubscriptions); // update local state if needed
+    }
+    setIsLoading(false);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -299,26 +311,27 @@ export function ImportSubscriptions({ isOnboarding = false }: { isOnboarding?: b
                                     <FormMessage />
                                 </div>
                                 ))}
-                                 <Button 
-                                    type="button" 
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => append({ id: `manual-sub-${fields.length}`, name: '', category: 'Other', price: 0, currency: 'USD', billingCycle: 'monthly', nextChargeDate: '', status: 'active' })}>
-                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                    Add Another Subscription
+                                <Button 
+                                type="button" 
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => append({ id: `manual-sub-${fields.length}`, name: '', category: 'Other', price: 0, currency: 'USD', billingCycle: 'monthly', nextChargeDate: '', status: 'active' })}>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add Another Subscription
+                              </Button>
+                              <DialogFooter>
+                                <Button type="submit" disabled={isLoading || fields.length === 0}>
+                                  <PlusCircle className="mr-2 h-4 w-4" />
+                                  Import {fields.length > 0 ? `${fields.length} Subscriptions` : ''}
                                 </Button>
+                              </DialogFooter>
                             </form>
                         </Form>
                     </div>
                 </ScrollArea>
             </div>
         </div>
-        <DialogFooter>
-          <Button type="button" onClick={form.handleSubmit(onSubmit)} disabled={isLoading || fields.length === 0}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Import {fields.length > 0 ? `${fields.length} Subscriptions` : ''}
-          </Button>
-        </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

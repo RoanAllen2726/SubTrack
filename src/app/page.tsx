@@ -49,8 +49,13 @@ export default function Page() {
     );
   }
 
-  // Not signed in → show Supabase Auth (login + signup + optional OAuth)
+  // Not signed in → show Supabase Auth (email/password only)
   if (!user) {
+    const redirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/confirm`
+        : undefined;
+
     return (
       <main className="min-h-[80vh] flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-4">
@@ -58,11 +63,15 @@ export default function Page() {
             <h1 className="text-3xl font-bold tracking-tight">Welcome to SubTrack</h1>
             <p className="text-muted-foreground">Sign in or create an account to continue.</p>
           </div>
+
           <Auth
             supabaseClient={supabase}
             appearance={{ theme: ThemeSupa }}
-            providers={["google", "github"]} // remove/adjust if not using OAuth
-            redirectTo={`${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`}
+            providers={[]}                 // no OAuth
+            onlyThirdPartyProviders={false}
+            magicLink={false}              // optional: disable magic links
+            view="sign_up"                 // optional: land on sign-up tab
+            redirectTo={redirectTo}        // IMPORTANT: /auth/confirm so you get token_hash & type
           />
         </div>
       </main>

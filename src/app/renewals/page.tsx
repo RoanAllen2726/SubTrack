@@ -4,7 +4,7 @@
 import { RenewalsList } from "@/components/renewals/renewals-list";
 import { useSubscription } from "@/context/SubscriptionContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RenewalsCalendar } from "@/components/renewals/renewals-calendar";
+import { RenewalsCalendar } from "@/components/renewals/renewals-calender";
 import { List, Calendar as CalendarIcon } from "lucide-react";
 
 export default function RenewalsPage() {
